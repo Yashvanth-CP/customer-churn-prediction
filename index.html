@@ -1,0 +1,191 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Churn Predictor</title>
+<style>
+  :root { --green:#2e9e4f; --dark:#17381f; --bg:#f4f8f5; --red:#d64545; --orange:#e8912d; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, Arial, sans-serif; background: var(--bg); margin: 0; color: #1d2b21; }
+  header { background: var(--dark); color: #fff; padding: 20px; text-align: center; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 6px 0 0; opacity: .8; font-size: .95rem; }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: grid; gap: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+  h2 { margin-top: 0; font-size: 1.1rem; color: var(--dark); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 4px; }
+  select, input { width: 100%; padding: 9px; border: 1px solid #c9d6cc; border-radius: 8px; font-size: .95rem; }
+  button { background: var(--green); color: #fff; border: 0; padding: 13px 28px; font-size: 1rem;
+           border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; }
+  button:hover { background: #26843f; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .presets { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .presets button { width: auto; background: #fff; color: var(--dark); border: 1px solid var(--green); padding: 8px 14px; font-size: .85rem; }
+  #result { display: none; text-align: center; }
+  .pct { font-size: 3rem; font-weight: 700; margin: 6px 0; }
+  .bar { height: 14px; background: #e3ebe5; border-radius: 7px; overflow: hidden; margin: 10px 0; }
+  .bar div { height: 100%; width: 0; transition: width .5s; }
+  .badge { display: inline-block; padding: 6px 14px; border-radius: 20px; color: #fff; font-weight: 600; }
+  .note { font-size: .8rem; color: #5b6b60; margin-top: 10px; }
+  #error { color: var(--red); font-size: .9rem; display: none; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Customer Churn Predictor</h1>
+  <p>Enter customer details to estimate the chance of leaving</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Customer details</h2>
+    <div class="presets">
+      <button type="button" onclick="fillPreset('high')">Example: high risk</button>
+      <button type="button" onclick="fillPreset('low')">Example: low risk</button>
+    </div>
+    <form id="form">
+      <div class="grid" id="fields"></div>
+      <br>
+      <button type="submit" id="btn">Predict</button>
+      <div id="error"></div>
+    </form>
+  </div>
+
+  <div class="card" id="result">
+    <h2>Result</h2>
+    <div class="pct" id="pct"></div>
+    <div class="bar"><div id="barfill"></div></div>
+    <span class="badge" id="badge"></span>
+    <p class="note" id="note"></p>
+  </div>
+</main>
+
+<script>
+const API_URL = "http://127.0.0.1:8000/api/predict-churn";
+
+const YN = ["Yes", "No"];
+const YN_NET = ["Yes", "No", "No internet service"];
+
+// name, label, type, options (or null for number)
+const FIELDS = [
+  ["gender", "Gender", "select", ["Male", "Female"]],
+  ["SeniorCitizen", "Senior citizen (1 = yes)", "select", ["0", "1"]],
+  ["Partner", "Partner", "select", YN],
+  ["Dependents", "Dependents", "select", YN],
+  ["tenure", "Tenure (months)", "number"],
+  ["PhoneService", "Phone service", "select", YN],
+  ["MultipleLines", "Multiple lines", "select", ["No", "Yes", "No phone service"]],
+  ["InternetService", "Internet service", "select", ["DSL", "Fiber optic", "No"]],
+  ["OnlineSecurity", "Online security", "select", YN_NET],
+  ["OnlineBackup", "Online backup", "select", YN_NET],
+  ["DeviceProtection", "Device protection", "select", YN_NET],
+  ["TechSupport", "Tech support", "select", YN_NET],
+  ["StreamingTV", "Streaming TV", "select", YN_NET],
+  ["StreamingMovies", "Streaming movies", "select", YN_NET],
+  ["Contract", "Contract", "select", ["Month-to-month", "One year", "Two year"]],
+  ["PaperlessBilling", "Paperless billing", "select", YN],
+  ["PaymentMethod", "Payment method", "select",
+    ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"]],
+  ["MonthlyCharges", "Monthly charges", "number"],
+  ["TotalCharges", "Total charges (blank = tenure x monthly)", "number"],
+];
+
+const PRESETS = {
+  high: { gender: "Male", SeniorCitizen: "0", Partner: "No", Dependents: "No", tenure: 2,
+    PhoneService: "Yes", MultipleLines: "No", InternetService: "Fiber optic", OnlineSecurity: "No",
+    OnlineBackup: "No", DeviceProtection: "No", TechSupport: "No", StreamingTV: "Yes",
+    StreamingMovies: "Yes", Contract: "Month-to-month", PaperlessBilling: "Yes",
+    PaymentMethod: "Electronic check", MonthlyCharges: 95, TotalCharges: 190 },
+  low: { gender: "Female", SeniorCitizen: "0", Partner: "Yes", Dependents: "Yes", tenure: 60,
+    PhoneService: "Yes", MultipleLines: "No", InternetService: "DSL", OnlineSecurity: "Yes",
+    OnlineBackup: "Yes", DeviceProtection: "Yes", TechSupport: "Yes", StreamingTV: "No",
+    StreamingMovies: "No", Contract: "Two year", PaperlessBilling: "No",
+    PaymentMethod: "Bank transfer (automatic)", MonthlyCharges: 55, TotalCharges: 3300 },
+};
+
+const fieldsDiv = document.getElementById("fields");
+FIELDS.forEach(([name, label, type, opts]) => {
+  const wrap = document.createElement("div");
+  let input;
+  if (type === "select") {
+    input = document.createElement("select");
+    opts.forEach(o => { const op = document.createElement("option"); op.value = o; op.textContent = o; input.appendChild(op); });
+  } else {
+    input = document.createElement("input");
+    input.type = "number"; input.step = "any"; input.min = "0";
+  }
+  input.id = name; input.name = name;
+  const lab = document.createElement("label");
+  lab.htmlFor = name; lab.textContent = label;
+  wrap.append(lab, input);
+  fieldsDiv.appendChild(wrap);
+});
+
+function fillPreset(key) {
+  const p = PRESETS[key];
+  Object.entries(p).forEach(([k, v]) => { document.getElementById(k).value = v; });
+}
+fillPreset("high");
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("btn");
+  const err = document.getElementById("error");
+  err.style.display = "none";
+
+  const body = {};
+  for (const [name, , type] of FIELDS) {
+    const val = document.getElementById(name).value;
+    if (type === "number") body[name] = val === "" ? null : parseFloat(val);
+    else body[name] = val;
+  }
+  body.SeniorCitizen = parseInt(body.SeniorCitizen, 10);
+  body.tenure = Math.round(body.tenure ?? 0);
+  if (body.MonthlyCharges === null) { showError("Please enter monthly charges."); return; }
+  if (body.TotalCharges === null) body.TotalCharges = body.tenure * body.MonthlyCharges;
+
+  btn.disabled = true; btn.textContent = "Predicting...";
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("API returned status " + res.status);
+    const data = await res.json();
+    showResult(data);
+  } catch (ex) {
+    showError("Could not reach the API. Is uvicorn running? (" + ex.message + ")");
+  } finally {
+    btn.disabled = false; btn.textContent = "Predict";
+  }
+});
+
+function showError(msg) {
+  const err = document.getElementById("error");
+  err.textContent = msg; err.style.display = "block";
+}
+
+function showResult(data) {
+  const p = data.churn_probability;
+  const pct = (p * 100).toFixed(1);
+  const color = p >= 0.5 ? "var(--red)" : (data.will_churn ? "var(--orange)" : "var(--green)");
+  document.getElementById("result").style.display = "block";
+  document.getElementById("pct").textContent = pct + "%";
+  document.getElementById("pct").style.color = color;
+  const fill = document.getElementById("barfill");
+  fill.style.background = color;
+  fill.style.width = Math.min(100, p * 100) + "%";
+  const badge = document.getElementById("badge");
+  badge.style.background = color;
+  badge.textContent = data.will_churn ? "Flagged: likely to churn" : "Not flagged";
+  document.getElementById("note").textContent =
+    "Customers are flagged when the probability is 12% or higher (threshold chosen by business cost).";
+  document.getElementById("result").scrollIntoView({ behavior: "smooth" });
+}
+</script>
+</body>
+</html>
