@@ -7,7 +7,8 @@ A machine learning project that predicts which telecom customers are likely to l
 Telecom companies lose revenue when customers leave. If we can predict who is likely to leave, the company can offer a retention deal before they go. A missed churner costs far more than an unnecessary discount, so the model is tuned for **high recall**.
 
 ## Dataset
-
+├── data/             
+# Telco Customer Churn CSV (from Kaggle)
 - Telco Customer Churn (Kaggle, IBM sample data)
 - 7,043 rows originally, **7,032 after cleaning** (11 rows with blank `TotalCharges` removed; they were brand-new customers with tenure 0)
 - 19 input features: demographics, services, contract, billing
@@ -22,8 +23,8 @@ Telecom companies lose revenue when customers leave. If we can predict who is li
 5. **Pipeline:** scaling and one-hot encoding are inside a scikit-learn `Pipeline`, so training and prediction use identical steps and the API accepts raw values.
 
 ## Results
-![Churn predictor frontend](images/frontend.png)
-![Churn predictor frontend](images/frontend2.png)
+![Churn predictor frontend](Images/frontend.png)
+![Churn predictor frontend](Images/frontend2.png)
 | Model | CV ROC-AUC (5-fold) |
 |---|---|
 | Logistic Regression | **0.845** |
@@ -63,7 +64,7 @@ A FastAPI service loads the saved pipeline and returns a churn probability.
 **Run:**
 
 ```
-pip install fastapi uvicorn scikit-learn pandas joblib
+pip install -r requirements.txt
 python -m uvicorn app:app --reload
 ```
 
